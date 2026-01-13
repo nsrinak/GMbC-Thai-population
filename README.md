@@ -8,4 +8,4 @@ If you use this work, please cite:
 https://doi.org/xxxx (to be updated once paper accecpted)
 
 ## License
-This project is licensed under xxx(the MIT License)xxx.
+This project is licensed under the MIT License.
