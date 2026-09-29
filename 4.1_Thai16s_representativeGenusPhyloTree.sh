@@ -12,8 +12,8 @@
 #SBATCH --qos=normal
 
 
-muscle -align 30072025_asv_genus_sequences_short_nogap.fasta -output 30072025_asv_genus_nogap_alignment.fasta
+muscle -align asv_genus_sequences_short_nogap.fasta -output asv_genus_nogap_alignment.fasta
 
-Gblocks 30072025_asv_genus_nogap_alignment.fasta -t=d
+Gblocks asv_genus_nogap_alignment.fasta -t=d
 
-FastTreeMP -nt -gtr -gamma -spr 4 -mlacc 2 -slownni -boot 500 30072025_asv_genus_nogap_alignment.fasta-gb > 29082025_tree_asv_genus_nogap-gb_boot
+FastTreeMP -nt -gtr -gamma -spr 4 -mlacc 2 -slownni -boot 500 asv_genus_nogap_alignment.fasta-gb > tree_asv_genus_nogap-gb_boot

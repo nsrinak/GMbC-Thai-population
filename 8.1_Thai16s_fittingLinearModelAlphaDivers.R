@@ -3,14 +3,22 @@ library(ggplot2)
 library(dplyr)
 library(broom)
 
-alpha_diversity_2 <- read.csv("C:/Project/5_16s_thai_population/22052005_diversityMetadataSampleDF.csv")
+alpha_diversity_2 <- readRDS("C:/Project/5_16s_thai_population/revise_aftermSystems/16082026_diversityMetadataSampleDF_pairwise.complete.rds")
 
-consensus_features_all <- read.csv("C:/Project/5_16s_thai_population/24052025_Lassofeatures_all_alphaDivesr.csv")
+consensus_features_all <- read.csv("C:/Project/5_16s_thai_population/revise_aftermSystems/23082026_Lassoconsensus_features_all_alphaDivesr_pairwise.complete.csv")
 # Optionally group features for downstream use
 consensus_feature_list <- consensus_features_all %>%
   filter(Frequency >= 0.8) %>%
+  mutate(Feature_Clean = case_when(
+    str_detect(Feature, "^tobacco") ~ "tobacco",
+    str_detect(Feature, "^admixture") ~ "admixture",
+    str_detect(Feature, "^sex") ~ "sex",
+    str_detect(Feature, "^breast_fed") ~ "breast_fed",
+    str_detect(Feature, "^c_section") ~ "c_section",
+    TRUE ~ Feature
+  )) %>% 
   group_by(Locality, Variable) %>%
-  summarise(Features = list(Feature), .groups = "drop")
+  summarise(Features = list(Feature_Clean), .groups = "drop")
 
 lm_locality <- consensus_feature_list %>% pull(Locality)
 lm_variable <- consensus_feature_list %>%  pull(Variable)
@@ -69,5 +77,5 @@ for (i  in unique(lm_locality)) {
   result_FDR <- bind_rows(result_FDR, res_loc)
 }
 
-write.csv(result_FDR, file = "C:/Project/5_16s_thai_population/26052025_LMfromLasso_AlphaDivesr_withFDR_80cutoff.csv")
+write.csv(result_FDR, file = "C:/Project/5_16s_thai_population/revise_aftermSystems/24082026_LMfromLasso_AlphaDivesr_withFDR_80cutoff.csv")
 

@@ -3,16 +3,15 @@ library(vegan)
 library(phyloseq)
 library(cowplot)
 
-asv_table <- readRDS("C:/Project/5_16s_thai_population/seqtab_final.rds")
-# row = ASV (sequence in this case)
-# col = sample ID
+asv_table <- readRDS("seqtab_final.rds")
 asv_table <- t(asv_table)
 
-taxa_table <- readRDS("C:/Project/5_16s_thai_population/tax_final.rds")
+taxa_table <- readRDS("tax_final.rds")
 
 
-meta_table <- read_tsv("C:/Project/5_16s_thai_population/thai_16s/metaData/metadata.tsv")
+meta_table <- read_tsv("metadata.tsv")
 meta_table <- meta_table %>% column_to_rownames(var = "donor_id") 
+
 ## Phyloseq object ----
 
 # Convert to phyloseq components
@@ -29,6 +28,7 @@ taxonomic_df_all <- taxonomic_df_all %>%
   mutate(Relative_Abundance = Abundance / sum(Abundance))
 
 # Beta diversity - new - with PCoA ---
+
 relative_matrix <- taxonomic_df_all %>%
   select(Sample, OTU, Relative_Abundance, locality) %>%
   pivot_wider(names_from = OTU, values_from = Relative_Abundance, values_fill = 0) %>% 
@@ -64,7 +64,7 @@ ord_PCoA_bray <- ggplot(pcoa_bray_df, aes(x = PC1, y = PC2, color = Locality, fi
     y = paste0("PC2 (", round(var_bray[2], 2), "%)")
   )
 
-physeq_treeroot <- readRDS("C:/Project/5_16s_thai_population/Phylogenetic tree/physeq_treeroot.rds")
+physeq_treeroot <- readRDS("physeq_treeroot.rds")
 unifrac_unweighted <- phyloseq::distance(physeq_treeroot, method = "unifrac", weighted = FALSE)
 unifrac_weighted <- phyloseq::distance(physeq_treeroot, method = "unifrac", weighted = TRUE)
 
@@ -83,13 +83,17 @@ ord_PCoA_unifrac_unweighted <- ggplot(pcoa_unifrac_unweighted_df, aes(x = PC1, y
   geom_point(size = 2, alpha = 0.7) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  theme_bw() +
+  theme_bw(base_size = 9) +
   theme(legend.position = "none") +
   labs(
     title = "Unweighted UniFrac",
     x = paste0("PC1 (", round(var_unifrac_unweighted[1], 2), "%)"),
     y = paste0("PC2 (", round(var_unifrac_unweighted[2], 2), "%)")
   )
+
+ggsave(plot = ord_PCoA_unifrac_unweighted,
+       filename = "ord_PCoA_unifrac_unweighted.png",
+       height = 2.25, width = 2.65, units = "in", dpi = 600)
 
 # Weighted UniFrac PCoA ----
 pcoa_unifrac_weighted <- ape::pcoa(unifrac_weighted)
@@ -147,7 +151,7 @@ ord_PCA_aitchison <- ggplot(pca_aitchison_df, aes(x = PC1, y = PC2, color = Loca
   geom_vline(xintercept = 0, linetype = "dashed")+
   geom_hline(yintercept = 0, linetype = "dashed")+
   #stat_ellipse(geom = "polygon", alpha = 0.07) +# Filled ellipses
-  theme_bw()+
+  theme_bw(base_size = 9)+
   theme(legend.position = "none")+
   labs(
     title = "Aitchison (PCA)",
@@ -155,17 +159,21 @@ ord_PCA_aitchison <- ggplot(pca_aitchison_df, aes(x = PC1, y = PC2, color = Loca
     y = paste0("PC2 (", round(variance_explained[2], 2), "%)")
   )
 
+ggsave(plot = ord_PCA_aitchison,
+       filename = "ord_PCA_aitchison.png",
+       height = 2.25, width = 2.65, units = "in", dpi = 600)
+
 # Combine all three PCoA plots ----
 p_comb_PCoA <- plot_grid(ord_PCoA_bray, ord_PCA_aitchison, 
                          ord_PCoA_unifrac_unweighted, ord_PCoA_unifrac_weighted, 
                          ncol = 2)
 
 ggsave(plot = p_comb_PCoA, 
-       filename = "C:/Project/5_16s_thai_population/figure/02092025_PCoA_all_betadivers_axis.png", 
+       filename = "PCoA_all_betadivers_axis.png", 
        width = 6.5, height = 4.5, units = "in", dpi = 300)
 
 ggsave(plot = ord_PCA_aitchison,
-       filename = "C:/Project/5_16s_thai_population/figure/23072025_PCA_aitchison_betadivers.png",
+       filename = "PCA_aitchison_betadivers.png",
        width = 7, height = 6)
 
 
@@ -194,14 +202,12 @@ ord_umap_bray <- ggplot(umap_bray_df, aes(x = UMAP1, y = UMAP2, color = Locality
   geom_point(size = 2, alpha = 0.7) +  # Points
   geom_vline(xintercept = 0, linetype = "dashed")+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  #stat_ellipse(geom = "polygon", alpha = 0.07) +# Filled ellipses
   theme_bw()+
   theme(legend.position = "none")+
   labs(title = "Bray Curtis")
 
 # Run UMAP on aitchison (CLR norm) ----
 umap_aitchison_res <- uwot::umap(as.matrix((clr_abund)), seed = 123)
-
 
 # Convert UMAP results into a dataframe
 umap_aitchison_df <- data.frame(
@@ -215,7 +221,6 @@ ord_umap_aitchison <- ggplot(umap_aitchison_df, aes(x = UMAP1, y = UMAP2, color 
   geom_point(size = 2, alpha = 0.7) +  # Points
   geom_vline(xintercept = 0, linetype = "dashed")+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  #stat_ellipse(geom = "polygon", alpha = 0.07) +# Filled ellipses
   theme_bw()+
   theme(legend.position = "none")+
   labs(title = "CLR normalization")
@@ -235,11 +240,9 @@ ord_umap_unifrac_unweight <- ggplot(umap_unifrac_unweight_df, aes(x = UMAP1, y =
   geom_point(size = 2, alpha = 0.7) +  # Points
   geom_vline(xintercept = 0, linetype = "dashed")+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  #stat_ellipse(geom = "polygon", alpha = 0.07) +# Filled ellipses
   theme_bw()+
   theme(legend.position = "none")+
   labs(title = "Unweighted UniFrac")
-
 
 # Run UMAP on weighted UniFrac distance matrix ----
 umap_unifrac_weight_res <- uwot::umap(as.matrix(unifrac_weighted), seed = 123)
@@ -256,18 +259,15 @@ ord_umap_unifrac_weight <- ggplot(umap_unifrac_weight_df, aes(x = UMAP1, y = UMA
   geom_point(size = 2, alpha = 0.7) +  # Points
   geom_vline(xintercept = 0, linetype = "dashed")+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  #stat_ellipse(geom = "polygon", alpha = 0.07) +  # Filled ellipses
   theme_bw()+
   theme(legend.position = "none")+
   labs(title = "Weighted UniFrac")
 
-
 p_comb_umap <- plot_grid(ord_umap_bray, ord_umap_unifrac_unweight, ord_umap_unifrac_weight, ncol = 3)
 
 ggsave(plot = p_comb_umap, 
-       filename = "C:/Project/5_16s_thai_population/figure/29072025_UMAP_all_betadivers.png", 
+       filename = "UMAP_all_betadivers.png", 
        width = 6.5, height = 2.5, units = "in", dpi = 300)
-
 
 ## Brta diversity statistic ----
 

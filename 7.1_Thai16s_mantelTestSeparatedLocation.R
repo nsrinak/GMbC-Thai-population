@@ -2,6 +2,7 @@ library(tidyverse)
 library(vegan)
 library(phyloseq)
 library(cowplot)
+
 asv_table <- readRDS("C:/Project/5_16s_thai_population/seqtab_final.rds")
 # row = ASV (sequence in this case)
 # col = sample ID
@@ -10,16 +11,19 @@ asv_table <- t(asv_table)
 taxa_table <- readRDS("C:/Project/5_16s_thai_population/tax_final.rds")
 
 
-meta_table <- read_tsv("C:/Project/5_16s_thai_population/thai_16s/metaData/metadata.tsv")
-meta_table <- meta_table %>% column_to_rownames(var = "donor_id") 
+meta <- readRDS("C:/Project/5_16s_thai_population/revise_aftermSystems/16082026_diversityMetadataSampleDF_pairwise.complete.rds")
+meta <- meta %>% select(-PD, -PSVs, -Richness, -Shannon, -Simpson, -Evenness) %>% as.data.frame()
+
+meta <- meta %>% select(-c("sex", "age", "height_cm", "bmi", "calprotectin", 
+                           "chromogranin", "igm", "iga", "admixture", "PRS_IBD", "weight_kg" ))
+
 ## Phyloseq object ----
 
 # Convert to phyloseq components
 ASV <- otu_table(asv_table, taxa_are_rows = TRUE)
 TAX <- tax_table(taxa_table)
-SAMP <- sample_data(meta_table)
 
-physeq <- phyloseq(ASV, TAX, SAMP)
+physeq <- phyloseq(ASV, TAX)
 
 taxonomic_df_all <- psmelt(physeq)
 
@@ -27,67 +31,25 @@ taxonomic_df_all <- taxonomic_df_all %>%
   group_by(Sample) %>%
   mutate(Relative_Abundance = Abundance / sum(Abundance))
 
-## Cleaning metadata ----
-
-fil_meta_data <- meta_table
-
-fil_meta_data[fil_meta_data == "na"] <- NA
-
-fil_meta_data <-fil_meta_data %>% 
-  select(-contains("Dim")) %>%                                 # remove transformed columns (contain "Dim")
-  select(where(~ !all(. %in% c(0, NA)) | !is.numeric(.))) %>%  # remove column that all zero
-  select(-contains("PC")) %>%                                  # remove column that contain "PC" for now -- this transformation is not bad though
-  select(where(~ !is.numeric(.) | mean(. == 0, na.rm = TRUE) <= 0.5)) %>%   # Remove numeric columns with >50% zeros
-  select(where(~ !is.factor(.) | mean(. == NA, na.rm = TRUE) <= 0.5)) %>% # Remove factor columns with >50% na
-  mutate(across(where(is.character), as.factor)) %>%           # convert character column to factor
-  mutate(across(where(is.factor), as.numeric))
-
-glimpse(fil_meta_data)
-
-cor_matrix <- cor(fil_meta_data, method = "pearson")
-cor
-remov_column <- cor_matrix %>% 
-  as.data.frame() %>% 
-  select(locality) %>% 
-  rownames_to_column(var="feature") %>%
-  filter(abs(locality) > 0.5 | is.na(locality)) %>% 
-  filter(!feature %in% c("locality", "sex")) %>% 
-  pull(feature)
-
-
-fil2_meta_data <- meta_table %>% 
-  select(-contains("Dim")) %>%                                 # remove transformed columns (contain "Dim")
-  select(where(~ !all(. %in% c(0, NA)) | !is.numeric(.))) %>%  # remove column that all zero
-  select(-contains("PC")) %>%                                  # remove column that contain "PC" for now -- this transformation is not bad though
-  mutate(across(where(is.character), as.factor)) %>%           # convert character column to factor %>% 
-  select(-c(remov_column)) %>%                                 # remove selected features
-  select(where(~ !is.numeric(.) | mean(. == 0, na.rm = TRUE) <= 0.5)) %>%   # Remove numeric columns with >50% zeros
-  select(where(~ !is.factor(.) | mean(. == "na", na.rm = TRUE) <= 0.5)) %>% # Remove factor columns with >50% na
-  rownames_to_column(var="Sample")
-
-glimpse(fil2_meta_data)
-
 ## Mantel test ----
-
 library(cluster)
 
-fil2_meta_data %>% glimpse()
-
 # Set row names to match sample IDs
-rownames(fil2_meta_data) <- fil2_meta_data$Sample
-fil2_meta_data2 <- fil2_meta_data[, -1]  # Remove sample column after setting row names
+rownames(meta) <- meta$Sample
+meta_1 <- meta[, -1] %>%   # Remove sample column after setting row names
+  select(-locality) 
 
 # Compute Gower’s distance
-env_gower <- daisy(fil2_meta_data2, metric = "gower")
-
-# Convert to matrix for visualization
-env_gower<- as.matrix(env_gower)
+env_gower <- daisy(meta_1, metric = "gower")
+env_gower <- as.matrix(env_gower)
 
 
 
 ## Separate location --
+loc_sample <- meta %>% select(Sample, locality) %>% unique()
 
 relative_matrix_bkk <- taxonomic_df_all %>%
+  left_join(.,loc_sample, by = "Sample") %>% 
   select(Sample, OTU, Relative_Abundance, locality) %>%
   pivot_wider(names_from = OTU, values_from = Relative_Abundance, values_fill = 0) %>% 
   column_to_rownames(var = "Sample") %>%
@@ -95,6 +57,7 @@ relative_matrix_bkk <- taxonomic_df_all %>%
   select(-locality)
 
 relative_matrix_phat <- taxonomic_df_all %>%
+  left_join(.,loc_sample, by = "Sample") %>% 
   select(Sample, OTU, Relative_Abundance, locality) %>%
   pivot_wider(names_from = OTU, values_from = Relative_Abundance, values_fill = 0) %>% 
   column_to_rownames(var = "Sample") %>%
@@ -102,6 +65,7 @@ relative_matrix_phat <- taxonomic_df_all %>%
   select(-locality)
 
 relative_matrix_tak <- taxonomic_df_all %>%
+  left_join(.,loc_sample, by = "Sample") %>% 
   select(Sample, OTU, Relative_Abundance, locality) %>%
   pivot_wider(names_from = OTU, values_from = Relative_Abundance, values_fill = 0) %>% 
   column_to_rownames(var = "Sample") %>%
@@ -119,11 +83,11 @@ bray_curtis_tak <- vegdist(as.matrix(relative_matrix_tak), method = "bray")
 bray_curtis_tak <- as.matrix(bray_curtis_tak)
 
 
-sample_order_bkk <- row.names(fil2_meta_data2 %>% filter(locality == "bangkok"))
+sample_order_bkk <- row.names(meta %>% filter(locality == "bangkok"))
 
-sample_order_phat <- row.names(fil2_meta_data2 %>% filter(locality == "phatthalung"))
+sample_order_phat <- row.names(meta %>% filter(locality == "phatthalung"))
 
-sample_order_tak <- row.names(fil2_meta_data2 %>% filter(locality == "tak"))
+sample_order_tak <- row.names(meta %>% filter(locality == "tak"))
 
 
 bray_curtis_bkk <- bray_curtis_bkk[sample_order_bkk, sample_order_bkk]
@@ -154,12 +118,12 @@ print(mantel_result_tak)
 #Call:
 #mantel(xdis = bray_curtis_bkk, ydis = env_gower_bkk, method = "pearson",      permutations = 10000) 
 #
-#Mantel statistic r: 0.06644 
-#      Significance: 0.17508 
+#Mantel statistic r: 0.08228 
+#      Significance: 0.13119 
 #
 #Upper quantiles of permutations (null model):
 #   90%    95%  97.5%    99% 
-#0.0914 0.1162 0.1373 0.1602 
+#0.0944 0.1191 0.1430 0.1703 
 #Permutation: free
 #Number of permutations: 10000
 #
@@ -170,12 +134,12 @@ print(mantel_result_tak)
 #Call:
 #  mantel(xdis = bray_curtis_phat, ydis = env_gower_phat, method = "pearson",      permutations = 10000) 
 #
-#Mantel statistic r: 0.08164 
-#Significance: 0.13529 
+#Mantel statistic r: 0.03482 
+#Significance: 0.29717 
 #
 #Upper quantiles of permutations (null model):
 #  90%    95%  97.5%    99% 
-#  0.0963 0.1260 0.1501 0.1770 
+#  0.0927 0.1231 0.1473 0.1753 
 #Permutation: free
 #Number of permutations: 10000
 #
@@ -186,14 +150,15 @@ print(mantel_result_tak)
 #Call:
 #mantel(xdis = bray_curtis_tak, ydis = env_gower_tak, method = "pearson",      permutations = 10000) 
 #
-#Mantel statistic r: -0.1469 
-#      Significance: 0.91741 
+#Mantel statistic r: -0.1815 
+#      Significance: 0.94881 
 #
 #Upper quantiles of permutations (null model):
 #  90%   95% 97.5%   99% 
-#0.139 0.176 0.210 0.243 
+#0.147 0.188 0.224 0.259 
 #Permutation: free
 #Number of permutations: 10000
+#
 
 # Convert distance matrices to vectors
 bray_vector_bkk <- bray_curtis_bkk[upper.tri(bray_curtis_bkk)]
@@ -216,22 +181,22 @@ data_tak <- data.frame(BrayCurtis = bray_vector_tak, EnvDistance = env_vector_ta
 p_mantel_bray_bkk <- ggplot(data_bkk, aes(x = BrayCurtis, y = EnvDistance)) +
   geom_point(color= "#6699cc", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
-  labs(x = "Bray-Curtis Distance", y = "Gower's Distance", title = "Bangkok") +
-  theme_bw()
+  labs(x = "Bray-Curtis Distance", y = " ", title = "Bangkok") +
+  theme_bw(base_size = 8)
 
 p_mantel_bray_phat <- ggplot(data_phat, aes(x = BrayCurtis, y = EnvDistance)) +
   geom_point(color= "#6699cc", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
   labs(x = "Bray-Curtis Distance", y = "", title = "Phatthalung") +
-  theme_bw()
+  theme_bw(base_size = 8)
 
 p_mantel_bray_tak <- ggplot(data_tak, aes(x = BrayCurtis, y = EnvDistance)) +
   geom_point(color= "#6699cc", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
   labs(x = "Bray-Curtis Distance", y = "", title = "Tak") +
-  theme_bw()
+  theme_bw(base_size = 8)
 
-p_metal_bray_all <- plot_grid(p_mantel_bray_bkk, p_mantel_bray_phat, p_mantel_bray_tak, ncol = 3)
+p_metal_bray_all <- plot_grid(p_mantel_bray, p_mantel_bray_bkk, p_mantel_bray_phat, p_mantel_bray_tak, ncol = 4)
 
 
 # Beta PD ----
@@ -271,17 +236,19 @@ print(mantel_result_unifrac_unweighted_bkk)
 print(mantel_result_unifrac_unweighted_phat)
 print(mantel_result_unifrac_unweighted_tak)
 
+#> print(mantel_result_unifrac_unweighted_bkk)
+#
 #Mantel statistic based on Pearson's product-moment correlation 
 #
 #Call:
 #mantel(xdis = unifrac_unweighted_bkk, ydis = env_gower_bkk, method = "pearson",      permutations = 10000) 
 #
-#Mantel statistic r: 0.0483 
-#      Significance: 0.28717 
+#Mantel statistic r: 0.04319 
+#      Significance: 0.30207 
 #
 #Upper quantiles of permutations (null model):
 #  90%   95% 97.5%   99% 
-#0.122 0.161 0.197 0.241 
+#0.127 0.174 0.211 0.254 
 #Permutation: free
 #Number of permutations: 10000
 #
@@ -292,12 +259,12 @@ print(mantel_result_unifrac_unweighted_tak)
 #Call:
 #  mantel(xdis = unifrac_unweighted_phat, ydis = env_gower_phat,      method = "pearson", permutations = 10000) 
 #
-#Mantel statistic r: 0.1086 
-#Significance: 0.11469 
+#Mantel statistic r: 0.05297 
+#Significance: 0.25277 
 #
 #Upper quantiles of permutations (null model):
 #  90%   95% 97.5%   99% 
-#  0.116 0.149 0.177 0.212 
+#  0.113 0.150 0.179 0.215 
 #Permutation: free
 #Number of permutations: 10000
 #
@@ -308,12 +275,12 @@ print(mantel_result_unifrac_unweighted_tak)
 #Call:
 #mantel(xdis = unifrac_unweighted_tak, ydis = env_gower_tak, method = "pearson",      permutations = 10000) 
 #
-#Mantel statistic r: -0.06226 
-#      Significance: 0.73033 
+#Mantel statistic r: -0.09034 
+#      Significance: 0.79872 
 #
 #Upper quantiles of permutations (null model):
 #  90%   95% 97.5%   99% 
-#0.129 0.164 0.192 0.228 
+#0.136 0.172 0.201 0.239 
 #Permutation: free
 #Number of permutations: 10000
 
@@ -332,12 +299,12 @@ print(mantel_result_unifrac_weighted_tak)
 #Call:
 #mantel(xdis = unifrac_weighted_bkk, ydis = env_gower_bkk, method = "pearson",      permutations = 10000) 
 #
-#Mantel statistic r: -0.0634 
-#      Significance: 0.82442 
+#Mantel statistic r: -0.04895 
+#      Significance: 0.73693 
 #
 #Upper quantiles of permutations (null model):
 #   90%    95%  97.5%    99% 
-#0.0918 0.1214 0.1479 0.1803 
+#0.0938 0.1261 0.1541 0.1846 
 #Permutation: free
 #Number of permutations: 10000
 #
@@ -348,12 +315,12 @@ print(mantel_result_unifrac_weighted_tak)
 #Call:
 #  mantel(xdis = unifrac_weighted_phat, ydis = env_gower_phat, method = "pearson",      permutations = 10000) 
 #
-#Mantel statistic r: 0.05289 
-#Significance: 0.23548 
+#Mantel statistic r: 0.02647 
+#Significance: 0.32997 
 #
 #Upper quantiles of permutations (null model):
 #  90%    95%  97.5%    99% 
-#  0.0993 0.1281 0.1531 0.1849 
+#  0.0972 0.1279 0.1554 0.1831 
 #Permutation: free
 #Number of permutations: 10000
 #
@@ -364,12 +331,12 @@ print(mantel_result_unifrac_weighted_tak)
 #Call:
 #mantel(xdis = unifrac_weighted_tak, ydis = env_gower_tak, method = "pearson",      permutations = 10000) 
 #
-#Mantel statistic r: -0.04399 
-#      Significance: 0.67243 
+#Mantel statistic r: -0.07463 
+#      Significance: 0.76512 
 #
 #Upper quantiles of permutations (null model):
 #  90%   95% 97.5%   99% 
-#0.123 0.160 0.188 0.219 
+#0.132 0.168 0.197 0.234 
 #Permutation: free
 #Number of permutations: 10000
 
@@ -395,57 +362,57 @@ data_unifrac_weighted_tak <- data.frame(unifrac_weighted = unifrac_weighted_vect
 p_mantel_unweighted_bkk <- ggplot(data_unifrac_unweighted_bkk, aes(x = unifrac_unweighted, y = EnvDistance)) +
   geom_point(color= "#336600", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
-  labs(x = "Unweighted UniFrac Distance", y = "Gower's Distance") +
-  theme_bw()
+  labs(x = "Unweighted UniFrac Distance", y = " ") +
+  theme_bw(base_size = 8)
   #xlim(0.28,0.81)
 
 p_mantel_unweighted_phat <- ggplot(data_unifrac_unweighted_phat, aes(x = unifrac_unweighted, y = EnvDistance)) +
   geom_point(color= "#336600", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
   labs(x = "Unweighted UniFrac Distance", y = "") +
-  theme_bw()
+  theme_bw(base_size = 8)
   #xlim(0.28,0.81)
 
 p_mantel_unweighted_tak <- ggplot(data_unifrac_unweighted_tak, aes(x = unifrac_unweighted, y = EnvDistance)) +
   geom_point(color= "#336600", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
   labs(x = "Unweighted UniFrac Distance", y = "") +
-  theme_bw()
+  theme_bw(base_size = 8)
   #xlim(0.28,0.81)
 
 p_mantel_weighted_bkk <- ggplot(data_unifrac_weighted_bkk, aes(x = unifrac_weighted, y = EnvDistance)) +
   geom_point(color= "#993300", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
-  labs(x = "Weighted UniFrac Distance", y = "Gower's Distance") +
-  theme_bw()
+  labs(x = "Weighted UniFrac Distance", y = " ") +
+  theme_bw(base_size = 8)
 
 p_mantel_weighted_phat <- ggplot(data_unifrac_weighted_phat, aes(x = unifrac_weighted, y = EnvDistance)) +
   geom_point(color= "#993300", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
   labs(x = "Weighted UniFrac Distance", y = "") +
-  theme_bw()
+  theme_bw(base_size = 8)
 
 p_mantel_weighted_tak <- ggplot(data_unifrac_weighted_tak, aes(x = unifrac_weighted, y = EnvDistance)) +
   geom_point(color= "#993300", alpha=0.15, size = 1.5) +
   geom_smooth(method = "lm", color ="#999999", se = TRUE) +
   labs(x = "Weighted UniFrac Distance", y = "") +
-  theme_bw()
+  theme_bw(base_size = 8)
 
-p_mantel_weighted_unifrac_all <- plot_grid(p_mantel_weighted_bkk, p_mantel_weighted_phat, p_mantel_weighted_tak, ncol = 3)
+p_mantel_weighted_unifrac_all <- plot_grid(p_mantel_weighted, p_mantel_weighted_bkk, p_mantel_weighted_phat, p_mantel_weighted_tak, ncol = 4)
 
-p_mantel_unweighted_unifrac_all <- plot_grid(p_mantel_unweighted_bkk, p_mantel_unweighted_phat, p_mantel_unweighted_tak, ncol = 3)
+p_mantel_unweighted_unifrac_all <- plot_grid(p_mantel_unweighted, p_mantel_unweighted_bkk, p_mantel_unweighted_phat, p_mantel_unweighted_tak, ncol = 4)
 
 
 ggsave(plot = p_mantel_weighted_unifrac_all, 
-       filename = "C:/Project/5_16s_thai_population/figure/23072025_p_mantel_weighted_unifrac_all.png", 
+       filename = "C:/Project/5_16s_thai_population/figure/revision_figures/16082026_p_mantel_weighted_unifrac_all.png", 
        width = 15, height = 4)
 
 ggsave(plot = p_mantel_unweighted_unifrac_all, 
-       filename = "C:/Project/5_16s_thai_population/figure/23072025_p_mantel_unweighted_unifrac_all.png", 
+       filename = "C:/Project/5_16s_thai_population/figure/revision_figures/16082026_p_mantel_unweighted_unifrac_all.png", 
        width = 15, height = 4)
 
 ggsave(plot = p_metal_bray_all, 
-       filename = "C:/Project/5_16s_thai_population/figure/23072025_p_metal_bray_all.png", 
+       filename = "C:/Project/5_16s_thai_population/figure/revision_figures/16082026_p_metal_bray_all.png", 
        width = 15, height = 4)
 
 
@@ -455,5 +422,15 @@ p_comb_separateLoc_mantel <- plot_grid(p_mantel_bray_bkk, p_mantel_bray_phat, p_
                                        ncol = 3, rel_heights = c(1.1,1,1))
 
 ggsave(plot = p_comb_separateLoc_mantel,
-       filename = "C:/Project/5_16s_thai_population/figure/03092025_p_comb_separateLoc_mantel.png",
+       filename = "C:/Project/5_16s_thai_population/figure/revision_figures/16082026_p_comb_separateLoc_mantel.png",
        width = 7, height = 7.5, units = "in", dpi = 300)
+
+
+p_maltel_all_andLocation <- plot_grid(p_metal_bray_all,
+                                      p_mantel_weighted_unifrac_all,
+                                      p_mantel_unweighted_unifrac_all,
+                                      nrow = 3)
+
+ggsave(plot = p_maltel_all_andLocation,
+       filename = "C:/Project/5_16s_thai_population/figure/revision_figures/09092026_p_maltel_all_andLocation.png",
+       width = 7, height = 5.25, units = "in", dpi = 600)

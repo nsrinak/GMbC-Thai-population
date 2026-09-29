@@ -2,8 +2,10 @@ library(tidyverse)
 library(sf)
 library(rnaturalearth)
 library(ggplot2)
+library(cowplot)
 
 ## Get Thailand map --
+
 cities <- data.frame(
   name = c("Bangkok", "Phatthalung", "Tak"),
   lon  = c(100.523186, 99.937307, 98.691235),
@@ -16,20 +18,17 @@ Yesp_map <- ggplot() +
   geom_sf(data = th_provinces, fill = "grey90", color = "white") +  # provinces
   geom_sf(data = st_union(th_provinces), fill = NA, color = "black", size = 0.5) + # country outline
   geom_point(data = cities, aes(x = lon, y = lat), color = "steelblue", size = 1.5) +
-  geom_text(data = cities, aes(x = lon, y = lat, label = name), vjust = -1, size = 2.5) +
+  geom_text(data = cities, aes(x = lon, y = lat, label = name), vjust = -1, hjust = 0, size = 3) +
   theme_void()
 
 ggsave(plot = Yesp_map,
-       filename = "C:/Project/5_16s_thai_population/figure/19102025_Yesp_map.png", 
-       width = 9, height = 12, units = "cm")
+       filename = "Yesp_map.png", 
+       width = 3, height = 4.25, units = "in")
 
 ## Plot meta data (main paper) --
 
-meta_table <- read_tsv("C:/Project/5_16s_thai_population/thai_16s/metaData/metadata.tsv")
+meta_table <- read_tsv("metadata.tsv")
 meta_table <- meta_table %>% column_to_rownames(var = "donor_id") 
-
-#meta_table %>% group_by(locality) %>% summarise(age_mean = mean(age),
-#                                                age_sd = sd(age))
 
 #    locality    age_mean age_sd
 #    <chr>          <dbl>  <dbl>
@@ -41,7 +40,7 @@ p_sex = meta_table %>%
   filter(sex != "na") %>%
   ggplot(aes(x=locality, fill = sex))+
   geom_bar(position=position_dodge())+
-  theme_bw()+
+  theme_bw(base_size = 8)+
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Number individual", fill = "Sex")+
   theme(legend.position = "none", axis.text.x = element_text(angle = 315, hjust = 0))
@@ -50,7 +49,7 @@ p_bmi = meta_table %>%
   filter(bmi != "na") %>% 
   ggplot(aes(x=locality, y=bmi, fill=locality))+
   geom_boxplot()+
-  theme_bw()+
+  theme_bw(base_size = 8)+
   theme(legend.position = "none", axis.text.x = element_blank()) +
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "BMI")
@@ -59,7 +58,7 @@ p_age = meta_table %>%
   filter(age != "na") %>% 
   ggplot(aes(x=locality, y=age, fill=locality))+
   geom_boxplot()+
-  theme_bw()+
+  theme_bw(base_size = 8)+
   theme(legend.position = "none", axis.text.x = element_blank()) +
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Age (year)")
@@ -70,7 +69,7 @@ p_temp = meta_table %>%
   select(locality, AnnualMeanTemp) %>% unique() %>% 
   ggplot(aes(x=locality, y = AnnualMeanTemp, fill = locality))+
   geom_bar(stat = "identity")+
-  theme_bw()+
+  theme_bw(base_size = 8)+
   theme(legend.position = "none", axis.text.x = element_blank()) +
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Annual temperature (ºC)")
@@ -81,7 +80,7 @@ p_precip = meta_table %>%
   select(locality, AnnualPrecipitation) %>% unique() %>% 
   ggplot(aes(x=locality, y = AnnualPrecipitation, fill = locality))+
   geom_bar(stat = "identity")+
-  theme_bw()+
+  theme_bw(base_size = 8)+
   theme(legend.position = "none", axis.text.x = element_blank()) +
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Annual precipitation (mm)")
@@ -91,7 +90,7 @@ p_locdens = meta_table %>%
   select(locality, locality_density) %>% unique() %>% 
   ggplot(aes(x=locality, y = locality_density, fill = locality))+
   geom_bar(stat = "identity")+
-  theme_bw()+
+  theme_bw(base_size = 8)+
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Local density")+
   theme(legend.position = "none", axis.text.x = element_text(angle = 315, hjust = 0))
@@ -99,19 +98,24 @@ p_locdens = meta_table %>%
 p_metadata_basic <- plot_grid(p_temp, p_age, p_precip, p_bmi,p_locdens, p_sex, ncol = 2, align = "v", rel_heights = c(1,1,1.3))
 
 ggsave(plot = p_metadata_basic,
-       filename = "C:/Project/5_16s_thai_population/figure/01092025_p_metadata_basic.png", 
-       width = 2.8, height = 6.2, units = "in")
+       filename = "p_metadata_basic.png", 
+       width = 3, height = 4.5, units = "in")
 
 ## Plot meta data (supplementary) --
 
-p_weight = meta_table %>% 
+p_weight <- meta_table %>% 
   filter(weight_kg != "na") %>% 
-  ggplot(aes(x=locality, y=weight_kg, fill=locality))+
-  geom_boxplot()+
-  theme_bw()+
-  theme(legend.position = "none", axis.text.x = element_blank()) +
-  scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
-  labs(x = "", y = "Weight (kg)")
+  ggplot(aes(x = locality, y = weight_kg, fill = locality)) +
+  geom_boxplot() +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_blank()
+  ) + labs(x = "", y = "Weight (kg)")
+
+ggsave(plot = p_weight,
+       filename = "p_weight.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_height = meta_table %>% 
   filter(height_cm != "na") %>% 
@@ -119,8 +123,11 @@ p_height = meta_table %>%
   geom_boxplot()+
   theme_bw()+
   theme(legend.position = "none", axis.text.x = element_blank()) +
-  scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Height (cm)")
+
+ggsave(plot = p_height,
+       filename = "p_height.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_water = meta_table %>% 
   filter(water_source != "na") %>%
@@ -128,9 +135,12 @@ p_water = meta_table %>%
   ggplot(aes(x=locality, fill = water_source))+
   geom_bar(position = position_dodge(preserve = "single"), width = 0.6)+
   theme_bw()+
-  scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
-  theme( axis.text.x = element_blank(), legend.position = "none") +
+  theme(legend.position = "none", axis.text.x = element_blank()) +
   labs(x = "", y = "Number", fill = "Water source")
+
+ggsave(plot = p_water,
+       filename = "p_water.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_house = meta_table %>% 
   filter(household_size != "na") %>%
@@ -138,8 +148,11 @@ p_house = meta_table %>%
   geom_boxplot()+
   theme_bw()+
   theme(legend.position = "none", axis.text.x = element_blank()) +
-  scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Household size")
+
+ggsave(plot = p_house,
+       filename = "p_house.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_exercise = meta_table %>% 
   filter(exercice_per_week != "na") %>%
@@ -150,6 +163,10 @@ p_exercise = meta_table %>%
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Exercise per week")
 
+ggsave(plot = p_exercise,
+       filename = "p_exercise.png", 
+       width = 1.75, height = 1.75, units = "in")
+
 p_electricity = meta_table %>% 
   filter(access_to_electricity != "na") %>%
   mutate(access_to_electricity = as.character(access_to_electricity)) %>% 
@@ -157,9 +174,12 @@ p_electricity = meta_table %>%
   ggplot(aes(x=locality, fill = access_to_electricity))+
   geom_bar(position = position_dodge(preserve = "single"), width = 0.6)+
   theme_bw()+
-  scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   theme(legend.position = "none", axis.text.x = element_blank()) +
   labs(x = "", y = "Number", fill = "Access to\nelectricity")
+
+ggsave(plot = p_electricity,
+       filename = "p_electricity.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_csection <- meta_table %>% 
   filter(c_section != "na") %>%
@@ -169,8 +189,11 @@ p_csection <- meta_table %>%
   geom_bar(position = position_dodge(preserve = "single"), width = 0.6)+
   theme_bw()+
   theme(legend.position = "none", axis.text.x = element_blank()) +
-  scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Number", fill = "C-section")
+
+ggsave(plot = p_csection,
+       filename = "p_csection.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_breastfed <- meta_table %>% 
   filter(breast_fed != "na") %>%
@@ -183,6 +206,10 @@ p_breastfed <- meta_table %>%
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Number", fill = "Breast\nfeeding")
 
+ggsave(plot = p_breastfed,
+       filename = "p_breastfed.png", 
+       width = 1.75, height = 1.75, units = "in")
+
 p_antibiotic <- meta_table %>% 
   filter(antibiotic != "na") %>%
   mutate(antibiotic = as.character(antibiotic)) %>% 
@@ -194,6 +221,10 @@ p_antibiotic <- meta_table %>%
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Number", fill = "Antibiotic")
 
+ggsave(plot = p_antibiotic,
+       filename = "p_antibiotic.png", 
+       width = 1.75, height = 1.75, units = "in")
+
 p_supprement <- meta_table %>% 
   filter(supplement_traditional_medicine != "na") %>%
   mutate(supplement_traditional_medicine = as.character(supplement_traditional_medicine)) %>% 
@@ -201,9 +232,13 @@ p_supprement <- meta_table %>%
   ggplot(aes(x=locality, fill = supplement_traditional_medicine))+
   geom_bar(position = position_dodge(preserve = "single"), width = 0.6)+
   theme_bw()+
-  theme(legend.position = "none", axis.text.x = element_text(angle = 315, hjust = 0)) +
+  theme(legend.position = "none", axis.text.x = element_blank()) +
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Number", fill = "Traditional\nmedicine")
+
+ggsave(plot = p_supprement,
+       filename = "p_supprement.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_oral <- meta_table %>% 
   filter(oral_topical_medication != "na") %>%
@@ -212,9 +247,13 @@ p_oral <- meta_table %>%
   ggplot(aes(x=locality, fill = oral_topical_medication))+
   geom_bar(position = position_dodge(preserve = "single"), width = 0.6)+
   theme_bw()+
-  theme(legend.position = "none", axis.text.x = element_text(angle = 315, hjust = 0)) +
+  theme(legend.position = "none", axis.text.x = element_blank()) +
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Number", fill = "Oral\ntreatment")
+
+ggsave(plot = p_oral,
+       filename = "p_oral.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_laxative <- meta_table %>% 
   filter(laxative != "na") %>%
@@ -223,9 +262,13 @@ p_laxative <- meta_table %>%
   ggplot(aes(x=locality, fill = laxative))+
   geom_bar(position = position_dodge(preserve = "single"), width = 0.6)+
   theme_bw()+
-  theme(legend.position = "none", axis.text.x = element_text(angle = 315, hjust = 0)) +
+  theme(legend.position = "none", axis.text.x = element_blank()) +
   scale_x_discrete(labels = c("bangkok" = "Bangkok", "tak" = "Tak", "phatthalung" = "Phatthalung"))+
   labs(x = "", y = "Number", fill = "Laxative")
+
+ggsave(plot = p_laxative,
+       filename = "p_laxative.png", 
+       width = 1.75, height = 1.75, units = "in")
 
 p_com_supple <- plot_grid(p_weight, p_height, p_exercise,
                           p_house, p_csection, p_breastfed,
@@ -233,5 +276,5 @@ p_com_supple <- plot_grid(p_weight, p_height, p_exercise,
                           p_supprement, p_oral, p_laxative, ncol = 3, align = "XY", rel_heights = c(1,1,1,1.2))
 
 ggsave(plot = p_com_supple,
-       filename = "C:/Project/5_16s_thai_population/figure/01092025_p_com_supple.png", 
+       filename = "p_com_supple.png", 
        width = 7, height = 10, units = "in")
