@@ -32,7 +32,7 @@ otu_mat <- taxonomic_df_all %>%
 # 2. Filter samples: library size >= 2500
 
 lib_size <- rowSums(otu_mat)
-otu_mat <- otu_mat[lib_size >= 2500, , drop = FALSE]
+otu_mat <- otu_mat[lib_size >= 1000, , drop = FALSE]
 
 # 3. Calculate relative abundance
 
